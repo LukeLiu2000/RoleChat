@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RoleChat · Luke Liu 的本地角色聊天</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div class="brand">🎭 RoleChat <span class="sub">Luke Liu · 本地角色聊天</span></div>
+  <div class="header-right">
+    <span id="providerBadge" class="badge">…</span>
+    <button id="btnSettings" class="ghost" type="button">⚙ 设置</button>
+  </div>
+</header>
+
+<div id="layout">
+  <aside id="sidebar">
+    <div class="panel">
+      <div class="panel-title">角色
+        <button id="btnNewChar" class="mini" type="button">＋ 新建</button>
+      </div>
+      <div id="charList" class="list"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">会话
+        <button id="btnNewSession" class="mini" type="button" disabled>＋ 新会话</button>
+      </div>
+      <div id="sessionList" class="list"></div>
+    </div>
+  </aside>
+
+  <main id="chatPane">
+    <div id="chatHead">
+      <div>
+        <b id="chatTitle">选择或创建一个角色</b>
+        <div id="chatSub" class="sub"></div>
+      </div>
+      <button id="btnSummary" class="ghost" type="button" title="查看本会话的早期对话摘要">📋 摘要</button>
+    </div>
+    <div id="messages"><div class="empty-hint">从左侧选择角色并开始会话。<br>提示：以「记住：…」「忘记：…」开头的消息会直接写入/删除长期记忆。<br><span class="sub">— Luke Liu —</span></div></div>
+    <div id="composer">
+      <textarea id="input" rows="3" placeholder="输入消息…（Ctrl+Enter 发送），或点🎤语音说话"></textarea>
+      <button id="btnMic" type="button" title="点击开始录音，再点一次结束并识别发送">🎤</button>
+      <button id="btnSend" type="button">发送</button>
+    </div>
+  </main>
+
+  <aside id="rightPane">
+    <div class="tabs">
+      <button class="tab active" data-tab="refs" type="button">本轮引用</button>
+      <button class="tab" data-tab="mems" type="button">记忆管理</button>
+      <button class="tab" data-tab="about" type="button">说明</button>
+    </div>
+    <div id="tab-refs" class="tabbody">
+      <div id="lastReplyMeta" class="sub">发送消息后，这里显示本轮引用了哪些长期记忆（含分数与命中词）以及记忆事件。</div>
+      <div id="refList"></div>
+      <div id="eventList"></div>
+    </div>
+    <div id="tab-mems" class="tabbody" hidden>
+      <div class="row">
+        <select id="memFilter">
+          <option value="">全部记忆</option>
+          <option value="user">仅用户记忆</option>
+          <option value="character">仅角色记忆</option>
+        </select>
+        <button id="btnAddMem" class="mini" type="button">＋ 添加</button>
+        <button id="btnExtract" class="mini" type="button" title="对本会话未处理的用户消息立即做一次记忆提取">⤴ 提取</button>
+      </div>
+      <div id="memList" class="list"></div>
+    </div>
+    <div id="tab-about" class="tabbody" hidden>
+      <h4>数据与隐私</h4>
+      <p>角色、会话、摘要、长期记忆、日志全部保存在本机数据目录（界面设置里可查看路径）。默认 mock 模式不联网；配置本地模型（Ollama / LM Studio）只访问本机；配置云端 API 后，对话内容会发送到你填写的那家服务。语音识别与语音合成同样全部本地运行。</p>
+      <h4>语音对话</h4>
+      <p>点输入框旁的 🎤 开始说话，再点一次结束：语音会被本地识别成文字并发送。角色的每条回复带 🔊 按钮，点击用所选音色（女声·晓晓 / 男声·云间）本地合成语音朗读；可在 ⚙ 设置 中开启自动朗读。</p>
+      <p class="sub">RoleChat v1.1 · 设计与搭建：Luke Liu</p>
+      <h4>「模型生成的回复」vs「存储的记忆」</h4>
+      <p>聊天区里带 <span class="chip model">模型生成</span> 标记的气泡是模型当轮输出，仅作为消息保存；带 <span class="chip mem">已存储记忆</span> 的卡片是长期记忆库的条目，会在之后每轮按相关性被引用。两者完全分开。</p>
+      <h4>记忆规则</h4>
+      <p>·「记住：…」开头 → 立即写入长期记忆（用户记忆）<br>
+         ·「记住关于角色：…」→ 写入当前角色的角色记忆<br>
+         ·「忘记：…」→ 删除匹配记忆；「忘记：全部」→ 清空<br>
+         · 普通消息由启发式规则/模型定期提取，宁缺毋滥；角色扮演里的虚构剧情不会变成关于你的事实<br>
+         · 检索用可解释的关键词打分（BM25 类），引用分数与命中词均可见</p>
+    </div>
+  </aside>
+</div>
+
+<!-- 角色编辑 -->
+<div id="modalChar" class="modal" hidden>
+  <div class="modal-box">
+    <h3 id="charModalTitle">新建角色</h3>
+    <input type="hidden" id="charId">
+    <label>名称 *</label><input id="charName" placeholder="例如：林小雨">
+    <label>背景</label><textarea id="charBackground" rows="2" placeholder="身份、经历、所处的世界"></textarea>
+    <label>性格</label><textarea id="charPersonality" rows="2" placeholder="核心性格特点"></textarea>
+    <label>说话风格</label><textarea id="charSpeech" rows="2" placeholder="语气、口头禅、句式"></textarea>
+    <label>行为规则</label><textarea id="charRules" rows="2" placeholder="必须做/不能做的事"></textarea>
+    <div class="modal-actions">
+      <button id="btnCharDelete" class="danger" type="button" hidden>删除角色</button>
+      <span class="spacer"></span>
+      <button id="btnCharCancel" type="button">取消</button>
+      <button id="btnCharSave" class="primary" type="button">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 设置 -->
+<div id="modalSettings" class="modal" hidden>
+  <div class="modal-box wide">
+    <h3>设置</h3>
+    <h4>模型服务</h4>
+    <div class="row presets">
+      <button class="mini" data-preset="mock" type="button">离线模拟</button>
+      <button class="mini" data-preset="ollama" type="button">Ollama 本地</button>
+      <button class="mini" data-preset="lmstudio" type="button">LM Studio 本地</button>
+      <button class="mini" data-preset="anthropic" type="button">Claude 云端</button>
+    </div>
+    <label>provider</label>
+    <select id="setProvider">
+      <option value="mock">mock（离线模拟，无需模型）</option>
+      <option value="ollama">ollama（本地）</option>
+      <option value="openai">openai 兼容（LM Studio / vLLM 等）</option>
+      <option value="anthropic">anthropic（Claude 云端 API）</option>
+    </select>
+    <label>服务地址 base_url</label><input id="setBase" placeholder="http://localhost:11434">
+    <label>模型名</label><input id="setModel" placeholder="如 qwen2.5:7b / claude-opus-5-5">
+    <label>API Key（云端用；本地模型留空）</label><input id="setKey" type="password" placeholder="只保存在本机 config.json">
+    <div class="row">
+      <label class="inline">上下文预算(字符)</label><input id="setCtx" type="number" class="num">
+      <label class="inline">max_tokens</label><input id="setMaxTok" type="number" class="num">
+      <label class="inline">超时(秒)</label><input id="setTimeout" type="number" class="num">
+    </div>
+    <p class="sub">注：Claude 云端模式下对话内容会发送到 Anthropic；新版 Claude 模型不接受温度参数，应用已自动处理。</p>
+    <h4>记忆参数</h4>
+    <div class="row">
+      <label class="inline">每轮最多引用</label><input id="setMemK" type="number" class="num">
+      <label class="inline">最低相关分</label><input id="setMemMin" type="number" step="0.05" class="num">
+      <label class="inline">提取间隔(条)</label><input id="setMemEvery" type="number" class="num">
+    </div>
+    <h4>语音对话（Luke Liu · 全本地）</h4>
+    <div class="row">
+      <label class="inline" style="margin-left:0">角色音色</label>
+      <select id="setTtsVoice" style="width:auto">
+        <option value="female">女声</option>
+        <option value="male">男声</option>
+      </select>
+      <label class="inline"><input id="setAutoTts" type="checkbox" style="width:auto"> 回复后自动朗读</label>
+      <label class="inline">语速</label><input id="setTtsSpeed" type="number" step="0.1" min="0.5" max="2" class="num">
+    </div>
+    <p class="sub">语音识别（SenseVoice）与语音合成（Kokoro）全部本地运行，不联网；语音服务由「启动RoleChat.bat」一并拉起。</p>
+    <div class="modal-actions">
+      <button id="btnProbe" class="ghost" type="button">🔌 测试连接</button>
+      <span id="probeResult" class="sub"></span>
+      <span class="spacer"></span>
+      <button id="btnCfgCancel" type="button">取消</button>
+      <button id="btnCfgSave" class="primary" type="button">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 会话摘要 -->
+<div id="modalSummary" class="modal" hidden>
+  <div class="modal-box">
+    <h3>早期对话摘要（短期记忆压缩）</h3>
+    <pre id="summaryText" class="pre"></pre>
+    <div class="modal-actions"><span class="spacer"></span><button id="btnSummaryClose" type="button">关闭</button></div>
+  </div>
+</div>
+
+<div id="toast" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

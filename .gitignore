@@ -1,0 +1,34 @@
+# Python virtual environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Build outputs
+.build-cache/
+build/
+dist/
+
+# Private runtime data
+/data/
+/tests/testdata/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+/config.json
+
+# Local tools and downloaded dependencies
+/tools/voice/
+/tools/ollama/
+/tools/downloads/
+node_modules/
+.npmcache/
+
+# Logs
+*.log
+
+# Generated PDF documents
+/docs/*.pdf
